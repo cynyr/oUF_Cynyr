@@ -1,0 +1,9 @@
+## Interface: 30200
+## Author: Cynyr
+## Version: 0.1
+## Title: oUF Cynyr
+## Notes: Just another oUF layout
+## RequiredDeps: oUF
+## OptionalDeps: oUF_DebuffHighlight, oUF_Experience, oUF_MovableFrames, oUF_BarFader
+
+oUF_Cynyr.xml
