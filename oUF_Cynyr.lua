@@ -5,10 +5,10 @@
 
 --]]
 
---settings have been omved to here, for easier changing
+--some settings have been omved to here, for easier changing
 local minalpha = 0
 local maxalpha = 1
-local castbaroffset = 140
+local castbaroffset = 80
 local castbarheight = 16
 local castbarbuttonsize = 21
 local playertargetheight = 27
@@ -17,6 +17,8 @@ local petheight = 27
 local petwidth = 130
 local focustargettargetheight = 20
 local focustargettargetwidth = playertargetwidth * .80
+local debuffsize = 10
+local hideparty=true
 
 
 
@@ -195,7 +197,7 @@ local function style(self, unit)
 		self.Debuffs:SetHeight(20)
 		self.Debuffs:SetWidth(44)
 		self.Debuffs.num = 2
-		self.Debuffs.size = 20
+		self.Debuffs.size = debuffsize
 		self.Debuffs.spacing = 4
 		self.PostCreateAuraIcon = createAura
 
@@ -289,7 +291,7 @@ local function style(self, unit)
 		self.Buffs:SetHeight(44)
 		self.Buffs:SetWidth(236)
 		self.Buffs.num = 20
-		self.Buffs.size = 20
+		self.Buffs.size = debuffsize
 		self.Buffs.spacing = 4
 		self.Buffs.initialAnchor = 'TOPLEFT'
 		self.Buffs['growth-y'] = 'DOWN'
@@ -410,6 +412,14 @@ local function style(self, unit)
     self.MoveableFrames = true
 end
 
+local function hideBlizPartyFrames(self)
+    local blizUI = PartyMemberBackground
+    for i=1,4 do _G["PartyMemberFrame"..i]:SetParent( blizUI )
+        _G["PartyMemberFrame"..i.."PetFrame"]:SetParent( blizUI )
+    end
+    blizUI:Hide(); 
+end
+
 oUF:RegisterStyle('Cynyr', style)
 oUF:SetActiveStyle('Cynyr')
 
@@ -418,3 +428,7 @@ oUF:Spawn('target', "oUF_Cynyr_target"):SetPoint('CENTER', UIParent, 220, -250)
 oUF:Spawn('targettarget', "oUF_Cynyr_targettarget"):SetPoint('BOTTOMRIGHT', oUF.units.target, 'TOPRIGHT', 0, 5)
 oUF:Spawn('focus', "oUF_Cynyr_focus"):SetPoint('BOTTOMLEFT', oUF.units.player, 'TOPLEFT', 0, 5)
 oUF:Spawn('pet', "oUF_Cynyr_pet"):SetPoint('RIGHT', oUF.units.player, 'LEFT', -25, 0)
+if (hideparty) then
+    hideBlizPartyFrames()
+end
+
