@@ -5,7 +5,7 @@
 
 --]]
 
---some settings have been omved to here, for easier changing
+--some settings have been moved to here, for easier changing
 local minalpha = 0
 local maxalpha = 1
 local castbaroffset = 80
@@ -30,6 +30,7 @@ local backdrop = {
 	bgFile = [=[Interface\ChatFrame\ChatFrameBackground]=],
 	insets = {top = -1, bottom = -1, left = -1, right = -1}
 }
+local FONT = 'GameFontHighlightSmallRight'
 
 local colors = setmetatable({
 	power = setmetatable({
@@ -154,6 +155,42 @@ local function customFilter(icons, unit, icon, name, rank, texture, count, dtype
 	end
 end
 
+ --[[ Creates a RuneFrame
+FRAME CreateRuneFrame(FRAME self)
+]]
+local CreateRuneFrame = function(self)
+    local i
+    local rf = CreateFrame('Frame', nil, self)
+    rf:SetHeight(10)
+    rf:SetWidth(33)
+
+    for i = 1, 6 do
+        rf[i] = CreateFrame('StatusBar', nil, rf)
+        rf[i]:SetHeight(10)
+        rf[i]:SetWidth(33)
+        rf[i]:SetStatusBarTexture(minimalist, 'BORDER')
+        rf[i]:SetBackdrop(backdrop)
+        rf[i]:SetBackdropColor(0, 0, 0, 1)
+        rf[i]:SetBackdropBorderColor(0, 0, 0, 0)
+        rf[i].bg = rf[i]:CreateTexture(nil, 'BACKGROUND')
+        rf[i].bg:SetAllPoints(rf[i])
+        rf[i].bg:SetTexture(backdrop)
+        rf[i].bg:SetVertexColor(0.3, 0.3, 0.3, 0.5)
+        --[[lib.CreateBorder(rf[i], 10)
+        for _, tex in ipairs(rf[i].borderTextures) do
+            tex:SetParent(rf[i])
+        end--]]
+        if (i == 1) then
+            rf[i]:SetPoint('BOTTOMLEFT', self, 'TOPLEFT', 0, -10)
+        else
+            rf[i]:SetPoint('LEFT', rf[i-1], 'RIGHT', 5, 0)
+        end
+        rf[i]:Show()
+    end
+
+    return rf
+end
+
 local function style(self, unit)
 	self.colors = colors
 	self.menu = menu
@@ -182,7 +219,7 @@ local function style(self, unit)
 	local health = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallRight')
 	health:SetPoint('RIGHT', self.Health, -2, -1)
 	health.frequentUpdates = 0.25
-	self:Tag(health, '[phealth]')
+	self:Tag(health, '[phealth][cpoints]')
 
 	self.RaidIcon = self.Health:CreateTexture(nil, 'OVERLAY')
 	self.RaidIcon:SetPoint('TOP', self, 0, 8)
@@ -193,22 +230,22 @@ local function style(self, unit)
 		self:SetAttribute('initial-height', focustargettargetheight)
 		self:SetAttribute('initial-width', focustargettargetwidth)
 
-		self.Debuffs = CreateFrame('Frame', nil, self)
-		self.Debuffs:SetHeight(20)
-		self.Debuffs:SetWidth(44)
-		self.Debuffs.num = 2
-		self.Debuffs.size = debuffsize
-		self.Debuffs.spacing = 4
-		self.PostCreateAuraIcon = createAura
+		--self.Debuffs = CreateFrame('Frame', nil, self)
+		--self.Debuffs:SetHeight(20)
+		--self.Debuffs:SetWidth(44)
+		--self.Debuffs.num = 2
+		--self.Debuffs.size = debuffsize
+		--self.Debuffs.spacing = 4
+		--self.PostCreateAuraIcon = createAura
 
 		if(unit == 'focus') then
-			self.Debuffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
-			self.Debuffs.onlyShowPlayer = true
-			self.Debuffs.initialAnchor = 'TOPLEFT'
+			--self.Debuffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
+			--self.Debuffs.onlyShowPlayer = true
+			--self.Debuffs.initialAnchor = 'TOPLEFT'
 		else
-			self.Debuffs:SetPoint('TOPRIGHT', self, 'TOPLEFT', -4, 0)
-			self.Debuffs.initialAnchor = 'TOPRIGHT'
-			self.Debuffs['growth-x'] = 'LEFT'
+			--self.Debuffs:SetPoint('TOPRIGHT', self, 'TOPLEFT', -4, 0)
+			--self.Debuffs.initialAnchor = 'TOPRIGHT'
+			--self.Debuffs['growth-x'] = 'LEFT'
 		end
 	else
 		self.Power = CreateFrame('StatusBar', nil, self)
@@ -259,12 +296,12 @@ local function style(self, unit)
 		local power = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallLeft')
 		power:SetPoint('LEFT', self.Health, 2, -1)
 		power.frequentUpdates = 0.1
-		self:Tag(power, '[ppower][( )druidpower]')
+		self:Tag(power, '[ppower][druidpower]')
 	else
 		local info = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallLeft')
 		info:SetPoint('LEFT', self.Health, 2, -1)
 		info:SetPoint('RIGHT', health, 'LEFT')
-		self:Tag(info, '[pname]|cff0090ff[( )rare]|r')
+		self:Tag(info, '[pname]|cff0090ff[rare]|r')
 	end
 
 	if(unit == 'pet') then
@@ -286,16 +323,16 @@ local function style(self, unit)
 		self:SetAttribute('initial-height', playertargetheight)
 		self:SetAttribute('initial-width', playertargetwidth)
 
-		self.Buffs = CreateFrame('Frame', nil, self)
-		self.Buffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
-		self.Buffs:SetHeight(44)
-		self.Buffs:SetWidth(236)
-		self.Buffs.num = 20
-		self.Buffs.size = debuffsize
-		self.Buffs.spacing = 4
-		self.Buffs.initialAnchor = 'TOPLEFT'
-		self.Buffs['growth-y'] = 'DOWN'
-		self.PostCreateAuraIcon = createAura
+		--self.Buffs = CreateFrame('Frame', nil, self)
+		--self.Buffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
+		--self.Buffs:SetHeight(44)
+		--self.Buffs:SetWidth(236)
+		--self.Buffs.num = 20
+		--self.Buffs.size = debuffsize
+		--self.Buffs.spacing = 4
+		--self.Buffs.initialAnchor = 'TOPLEFT'
+		--self.Buffs['growth-y'] = 'DOWN'
+		--self.PostCreateAuraIcon = createAura
 
 		self.Castbar = CreateFrame('StatusBar', nil, self)
 		self.Castbar:SetWidth(playertargetwidth - 25)
@@ -340,47 +377,33 @@ local function style(self, unit)
 	end
 
 	if(unit == 'target') then
-		self.Debuffs = CreateFrame('Frame', nil, self)
-		self.Debuffs:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -4)
-		self.Debuffs:SetHeight(20 * 0.97)
-		self.Debuffs:SetWidth(playertargetwidth)
-		self.Debuffs.num = 20
-		self.Debuffs.size = 20 * 0.97
-		self.Debuffs.spacing = 4
-		self.Debuffs.initialAnchor = 'TOPLEFT'
-		self.Debuffs['growth-y'] = 'DOWN'
-		self.PostCreateAuraIcon = createAura
-		self.PostUpdateAuraIcon = updateDebuff
+		--self.Debuffs = CreateFrame('Frame', nil, self)
+		--self.Debuffs:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -4)
+		--self.Debuffs:SetHeight(20 * 0.97)
+		--self.Debuffs:SetWidth(playertargetwidth)
+		--self.Debuffs.num = 20
+		--self.Debuffs.size = 20 * 0.97
+		--self.Debuffs.spacing = 4
+		--self.Debuffs.initialAnchor = 'TOPLEFT'
+		--self.Debuffs['growth-y'] = 'DOWN'
+		--self.PostCreateAuraIcon = createAura
+		--self.PostUpdateAuraIcon = updateDebuff
 
-		self.CPoints = self:CreateFontString(nil, 'OVERLAY', 'SubZoneTextFont')
-		self.CPoints:SetPoint('RIGHT', self, 'LEFT', -9, 0)
-		self.CPoints:SetTextColor(1, 1, 1)
-		self.CPoints:SetJustifyH('RIGHT')
-		self.CPoints.unit = PlayerFrame.unit
-		self:RegisterEvent('UNIT_COMBO_POINTS', updateCombo)
+		--self.CPoints = self:CreateFontString(nil, 'OVERLAY', 'SubZoneTextFont')
+		--self.CPoints:SetPoint('RIGHT', self, 'LEFT', -9, 0)
+		--self.CPoints:SetTextColor(1, 1, 1)
+		--self.CPoints:SetJustifyH('RIGHT')
+		--self.CPoints.unit = PlayerFrame.unit
+		--self:RegisterEvent('UNIT_COMBO_POINTS', updateCombo)
 	end
 
 	if(unit == 'player') then
 		if(select(2, UnitClass('player')) == 'DEATHKNIGHT') then
-			self.Runes = CreateFrame('Frame', nil, self)
-			self.Runes:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -1)
-			self.Runes:SetHeight(4)
-			self.Runes:SetWidth(playertargetwidth)
-			self.Runes:SetBackdrop(backdrop)
-			self.Runes:SetBackdropColor(0, 0, 0)
-			self.Runes.anchor = 'TOPLEFT'
-			self.Runes.growth = 'RIGHT'
-			self.Runes.height = 4
-			self.Runes.width = playertargetwidth / 6 - 0.85
+            local runes  = CreateRuneFrame()
+            runes:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -20)
+			runes:SetPoint('TOPRIGHT', self, 'BOTTOMRIGHT', 0, -20)
 
-			for index = 1, 6 do
-				self.Runes[index] = CreateFrame('StatusBar', nil, self.Runes)
-				self.Runes[index]:SetStatusBarTexture(minimalist)
-
-				self.Runes[index].bg = self.Runes[index]:CreateTexture(nil, 'BACKGROUND')
-				self.Runes[index].bg:SetAllPoints(self.Runes[index])
-				self.Runes[index].bg:SetTexture(0.3, 0.3, 0.3)
-			end
+            self.Runes = runes
 		end
         if(unit=="player" and IsAddOnLoaded("oUF_BarFader")) then
             self.BarFade = true
@@ -403,8 +426,8 @@ local function style(self, unit)
 		info.frequentUpdates = 0.25
 		self:Tag(info, '[pthreat]|cffff0000[pvptime]|r')
 
-		self.PostUpdateAuraIcon = updateBuff
-		self.CustomAuraFilter = customFilter
+		--self.PostUpdateAuraIcon = updateBuff
+		--self.CustomAuraFilter = customFilter
 	end
 
 	self.DebuffHighlightBackdrop = true
