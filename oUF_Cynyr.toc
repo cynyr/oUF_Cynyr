@@ -6,4 +6,5 @@
 ## RequiredDeps: oUF
 ## OptionalDeps: oUF_DebuffHighlight, oUF_Experience, oUF_MovableFrames, oUF_BarFader
 
-oUF_Cynyr.xml
+config.lua
+oUF_Cynyr.lua

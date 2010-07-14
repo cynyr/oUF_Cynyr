@@ -1,11 +1,12 @@
 --[[
 
-  Adrian L Lange grants anyone the right to use this work for any purpose,
-  without any conditions, unless such conditions are required by law.
+  This a modification of oUF_lily by Haste(Trond a Ekseth).
+  http://www.wowinterface.com/downloads/info9995-oUF_Lily
 
 --]]
 
 --some settings have been moved to here, for easier changing
+--These need to be moved to config.lua later if i still use them.
 local minalpha = 0
 local maxalpha = 1
 local castbaroffset = 80
@@ -20,438 +21,469 @@ local focustargettargetwidth = playertargetwidth * .80
 local debuffsize = 10
 local hideparty=true
 
+--get the addon namespace
+local addon, ns = ...
 
+--get the config values
+local cfg = ns.cfg
 
-local max = math.max
-local floor = math.floor
-
-local minimalist = [=[Interface\AddOns\oUF_Cynyr\media\minimalist]=]
-local backdrop = {
-	bgFile = [=[Interface\ChatFrame\ChatFrameBackground]=],
-	insets = {top = -1, bottom = -1, left = -1, right = -1}
-}
-local FONT = 'GameFontHighlightSmallRight'
-
-local colors = setmetatable({
-	power = setmetatable({
-		MANA = {0, 144/255, 1}
-	}, {__index = oUF.colors.power}),
-	reaction = setmetatable({
-		[2] = {1, 0, 0},
-		[4] = {1, 1, 0},
-		[5] = {0, 1, 0}
-	}, {__index = oUF.colors.reaction}),
-	runes = setmetatable({
-		[1] = {0.8, 0, 0},
-		[3] = {0, 0.4, 0.7},
-		[4] = {0.8, 0.8, 0.8}
-	}, {__index = oUF.colors.runes})
-}, {__index = oUF.colors})
-
-local buffFilter = {
-	[GetSpellInfo(62600)] = true,
-	[GetSpellInfo(61336)] = true,
-	[GetSpellInfo(52610)] = true,
-	[GetSpellInfo(22842)] = true,
-	[GetSpellInfo(22812)] = true,
-	[GetSpellInfo(16870)] = true
-}
-
-local function menu(self)
-	local drop = _G[string.gsub(self.unit, '(.)', string.upper, 1) .. 'FrameDropDown']
-	if(drop) then
-		ToggleDropDownMenu(1, nil, drop, 'cursor')
+local menu = function(self)
+	local unit = self.unit:sub(1, -2)
+	local cunit = self.unit:gsub("^%l", string.upper)
+    
+    --Set the unit to pet if we are in a vehicle.
+	if(cunit == 'Vehicle') then
+		cunit = 'Pet'
+	end
+    
+    --Last three argument control the placement of the menu.
+	if(unit == "party" or unit == "partypet") then
+		ToggleDropDownMenu(1, nil, _G["PartyMemberFrame"..self.id.."DropDown"], "cursor", 0, 0)
+	elseif(_G[cunit.."FrameDropDown"]) then
+		ToggleDropDownMenu(1, nil, _G[cunit.."FrameDropDown"], "cursor", 0, 0)
 	end
 end
 
-local function updateCombo(self, event, unit)
-	if(unit == PlayerFrame.unit and unit ~= self.CPoints.unit) then
-		self.CPoints.unit = unit
-	end
-end
-
-local function updatePower(self, event, unit, bar, minVal, maxVal)
-	if(unit ~= 'target') then return end
-
-	if(maxVal ~= 0) then
-		self.Health:SetHeight(22)
-		bar:Show()
+local siValue = function(val)
+	if(val >= 1e6) then
+		return ('%.1f'):format(val / 1e6):gsub('%.', 'm')
+	elseif(val >= 1e4) then
+		return ("%.1f"):format(val / 1e3):gsub('%.', 'k')
 	else
-		self.Health:SetHeight(27)
-		bar:Hide()
+		return val
 	end
 end
 
-local function castIcon(self, event, unit)
-	local castbar = self.Castbar
-	if(castbar.interrupt) then
-		castbar.Button:SetBackdropColor(0, 0.9, 1)
+oUF.Tags['lily:health'] = function(unit)
+	if(not UnitIsConnected(unit) or UnitIsDead(unit) or UnitIsGhost(unit)) then return end
+
+	local min, max = UnitHealth(unit), UnitHealthMax(unit)
+	if(not UnitIsFriend('player', unit)) then
+		return siValue(min)
+	elseif(min ~= 0 and min ~= max) then
+		return '-' .. siValue(max - min)
 	else
-		castbar.Button:SetBackdropColor(0, 0, 0)
+		return max
 	end
 end
+oUF.TagEvents['lily:health'] = oUF.TagEvents.missinghp
 
-local function castTime(self, duration)
-	if(self.channeling) then
-		self.Time:SetFormattedText('%.1f ', duration)
-	elseif(self.casting) then
-		self.Time:SetFormattedText('%.1f ', self.max - duration)
-	end
+oUF.Tags['lily:power'] = function(unit)
+	local min, max = UnitPower(unit), UnitPowerMax(unit)
+	if(min == 0 or max == 0 or not UnitIsConnected(unit) or UnitIsDead(unit) or UnitIsGhost(unit)) then return end
+
+	return siValue(min)
 end
+oUF.TagEvents['lily:power'] = oUF.TagEvents.missingpp
 
-local function updateTime(self, elapsed)
-	self.remaining = max(self.remaining - elapsed, 0)
-	self.time:SetText(self.remaining < 90 and floor(self.remaining) or '')
-end
-
-local function updateBuff(self, icons, unit, icon, index)
-	local _, _, _, _, _, duration, expiration = UnitAura(unit, index, icon.filter)
-
-	if(duration > 0 and expiration) then
-		icon.remaining = expiration - GetTime()
-		icon:SetScript('OnUpdate', updateTime)
-	else
-		icon:SetScript('OnUpdate', nil)
-		icon.time:SetText()
-	end
-end
-
-local function updateDebuff(self, icons, unit, icon, index)
-	local _, _, _, _, dtype = UnitAura(unit, index, icon.filter)
-
-	if(icon.debuff) then
-		if(not UnitIsFriend('player', unit) and icon.owner ~= 'player' and icon.owner ~= 'vehicle') then
-			icon:SetBackdropColor(0, 0, 0)
-			icon.icon:SetDesaturated(true)
+local updateName = function(self, event, unit)
+    --control the color of the name for unit reaction
+	if(self.unit == unit) then
+		local r, g, b, t
+		if(UnitIsTapped(unit) and not UnitIsTappedByPlayer(unit) or not UnitIsConnected(unit)) then
+			r, g, b = .6, .6, .6
+		elseif(unit == 'pet') then
+			t = self.colors.happiness[GetPetHappiness()]
+		elseif(UnitIsPlayer(unit)) then
+			local _, class = UnitClass(unit)
+			t = self.colors.class[class]
 		else
-			local color = DebuffTypeColor[dtype] or DebuffTypeColor.none
-			icon:SetBackdropColor(color.r * 0.6, color.g * 0.6, color.b * 0.6)
-			icon.icon:SetDesaturated(false)
+			t = self.colors.reaction[UnitReaction(unit, "player")]
+		end
+
+		if(t) then
+			r, g, b = t[1], t[2], t[3]
+		end
+
+		if(r) then
+			self.Name:SetTextColor(r, g, b)
 		end
 	end
 end
 
-local function createAura(self, button, icons)
-	icons.showDebuffType = true
+local PostUpdateHealth = function(Health, unit, min, max)
+	if(UnitIsDead(unit)) then
+		Health:SetValue(0)
+	elseif(UnitIsGhost(unit)) then
+		Health:SetValue(0)
+	end
 
-	button.cd:SetReverse()
-	button:SetBackdrop(backdrop)
-	button:SetBackdropColor(0, 0, 0)
-	button.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
-	button.icon:SetDrawLayer('ARTWORK')
-	button.overlay:SetTexture()
+	Health:SetStatusBarColor(.25, .25, .35)
+	return updateName(Health:GetParent(), 'PostUpdateHealth', unit)
+end
 
-	if(self.unit == 'player') then
-		icons.disableCooldown = true
+local PostCastStart = function(Castbar, unit, spell, spellrank)
+	Castbar:GetParent().Name:SetText('×' .. spell)
+end
 
-		button.time = button:CreateFontString(nil, 'OVERLAY', 'NumberFontNormal')
-		button.time:SetPoint('TOPLEFT', button)
+local PostCastStop = function(Castbar, unit)
+	local self = Castbar:GetParent()
+	self.Name:SetText(UnitName(self.realUnit or unit))
+end
+
+local PostCastStopUpdate = function(self, event, unit)
+	if(unit ~= self.unit) then return end
+	return PostCastStop(self.Castbar, unit)
+end
+
+local PostCreateIcon = function(Auras, button)
+	local count = button.count
+	count:ClearAllPoints()
+	count:SetPoint"BOTTOM"
+
+	button.icon:SetTexCoord(.07, .93, .07, .93)
+end
+
+local PostUpdateIcon
+do
+	local playerUnits = {
+		player = true,
+		pet = true,
+		vehicle = true,
+	}
+
+	PostUpdateIcon = function(icons, unit, icon, index, offset, filter, isDebuff)
+		local texture = icon.icon
+		if(playerUnits[icon.owner]) then
+			texture:SetDesaturated(false)
+		else
+			texture:SetDesaturated(true)
+		end
 	end
 end
 
-local function customFilter(icons, unit, icon, name, rank, texture, count, dtype, duration, expiration, caster)
-	if(buffFilter[name] and caster == 'player') then
-		return true
+local PostUpdatePower = function(Power, unit, min, max)
+	local Health = Power:GetParent().Health
+	if(min == 0 or max == 0 or not UnitIsConnected(unit)) then
+		Power:SetValue(0)
+		Health:SetHeight(22)
+	elseif(UnitIsDead(unit) or UnitIsGhost(unit)) then
+		Power:SetValue(0)
+		Health:SetHeight(22)
+	else
+		Health:SetHeight(20)
 	end
 end
 
- --[[ Creates a RuneFrame
-FRAME CreateRuneFrame(FRAME self)
-]]
-local CreateRuneFrame = function(self)
-    local i
-    local rf = CreateFrame('Frame', nil, self)
-    rf:SetHeight(10)
-    rf:SetWidth(33)
-
-    for i = 1, 6 do
-        rf[i] = CreateFrame('StatusBar', nil, rf)
-        rf[i]:SetHeight(10)
-        rf[i]:SetWidth(33)
-        rf[i]:SetStatusBarTexture(minimalist, 'BORDER')
-        rf[i]:SetBackdrop(backdrop)
-        rf[i]:SetBackdropColor(0, 0, 0, 1)
-        rf[i]:SetBackdropBorderColor(0, 0, 0, 0)
-        rf[i].bg = rf[i]:CreateTexture(nil, 'BACKGROUND')
-        rf[i].bg:SetAllPoints(rf[i])
-        rf[i].bg:SetTexture(backdrop)
-        rf[i].bg:SetVertexColor(0.3, 0.3, 0.3, 0.5)
-        --[[lib.CreateBorder(rf[i], 10)
-        for _, tex in ipairs(rf[i].borderTextures) do
-            tex:SetParent(rf[i])
-        end--]]
-        if (i == 1) then
-            rf[i]:SetPoint('BOTTOMLEFT', self, 'TOPLEFT', 0, -10)
-        else
-            rf[i]:SetPoint('LEFT', rf[i-1], 'RIGHT', 5, 0)
-        end
-        rf[i]:Show()
-    end
-
-    return rf
+local RAID_TARGET_UPDATE = function(self, event)
+	local index = GetRaidTargetIndex(self.unit)
+	if(index) then
+		self.RIcon:SetText(ICON_LIST[index].."22|t")
+	else
+		self.RIcon:SetText()
+	end
 end
 
-local function style(self, unit)
-	self.colors = colors
+local Shared = function(self, unit)
+    --Set up the menu type and placement.
 	self.menu = menu
 
-	self:RegisterForClicks('AnyUp')
-	self:SetAttribute('type2', 'menu')
-
-	self:SetScript('OnEnter', UnitFrame_OnEnter)
-	self:SetScript('OnLeave', UnitFrame_OnLeave)
-
-	self:SetBackdrop(backdrop)
-	self:SetBackdropColor(0, 0, 0)
-
-	self.Health = CreateFrame('StatusBar', nil, self)
-	self.Health:SetPoint('TOPRIGHT')
-	self.Health:SetPoint('TOPLEFT')
-	self.Health:SetStatusBarTexture(minimalist)
-	self.Health:SetStatusBarColor(0.25, 0.25, 0.35)
-	self.Health:SetHeight((unit == 'focus' or unit == 'targettarget') and 20 or 22)
-	self.Health.frequentUpdates = true
-
-	self.Health.bg = self.Health:CreateTexture(nil, 'BORDER')
-	self.Health.bg:SetAllPoints(self.Health)
-	self.Health.bg:SetTexture(0.3, 0.3, 0.3)
-
-	local health = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallRight')
-	health:SetPoint('RIGHT', self.Health, -2, -1)
-	health.frequentUpdates = 0.25
-	self:Tag(health, '[phealth][cpoints]')
-
-	self.RaidIcon = self.Health:CreateTexture(nil, 'OVERLAY')
-	self.RaidIcon:SetPoint('TOP', self, 0, 8)
-	self.RaidIcon:SetHeight(16)
-	self.RaidIcon:SetWidth(16)
-
-	if(unit == 'focus' or unit == 'targettarget') then
-		self:SetAttribute('initial-height', focustargettargetheight)
-		self:SetAttribute('initial-width', focustargettargetwidth)
-
-		--self.Debuffs = CreateFrame('Frame', nil, self)
-		--self.Debuffs:SetHeight(20)
-		--self.Debuffs:SetWidth(44)
-		--self.Debuffs.num = 2
-		--self.Debuffs.size = debuffsize
-		--self.Debuffs.spacing = 4
-		--self.PostCreateAuraIcon = createAura
-
-		if(unit == 'focus') then
-			--self.Debuffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
-			--self.Debuffs.onlyShowPlayer = true
-			--self.Debuffs.initialAnchor = 'TOPLEFT'
-		else
-			--self.Debuffs:SetPoint('TOPRIGHT', self, 'TOPLEFT', -4, 0)
-			--self.Debuffs.initialAnchor = 'TOPRIGHT'
-			--self.Debuffs['growth-x'] = 'LEFT'
-		end
-	else
-		self.Power = CreateFrame('StatusBar', nil, self)
-		self.Power:SetPoint('BOTTOMRIGHT')
-		self.Power:SetPoint('BOTTOMLEFT')
-		self.Power:SetPoint('TOP', self.Health, 'BOTTOM', 0, -1)
-		self.Power:SetStatusBarTexture(minimalist)
-		self.Power.frequentUpdates = true
-
-		self.Power.colorClass = true
-		self.Power.colorTapping = true
-		self.Power.colorDisconnected = true
-		self.Power.colorReaction = unit ~= 'pet'
-		self.Power.colorHappiness = unit == 'pet'
-		self.Power.colorPower = unit == 'pet'
-
-		self.Power.bg = self.Power:CreateTexture(nil, 'BORDER')
-		self.Power.bg:SetAllPoints(self.Power)
-		self.Power.bg:SetTexture([=[Interface\ChatFrame\ChatFrameBackground]=])
-		self.Power.bg.multiplier = 0.3
-	end
-
-	if(unit == 'player' or unit == 'pet') then
-		if(IsAddOnLoaded('oUF_Experience')) then
-			self.Experience = CreateFrame('StatusBar', nil, self)
-			self.Experience:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -10)
-			self.Experience:SetPoint('TOPRIGHT', self, 'BOTTOMRIGHT', 0, -10)
-			self.Experience:SetHeight(11)
-			self.Experience:SetStatusBarTexture(minimalist)
-			self.Experience:SetStatusBarColor(0.15, 0.7, 0.1)
-			self.Experience.Tooltip = true
-
-			self.Experience.Rested = CreateFrame('StatusBar', nil, self)
-			self.Experience.Rested:SetAllPoints(self.Experience)
-			self.Experience.Rested:SetStatusBarTexture(minimalist)
-			self.Experience.Rested:SetStatusBarColor(0, 0.4, 1, 0.6)
-			self.Experience.Rested:SetBackdrop(backdrop)
-			self.Experience.Rested:SetBackdropColor(0, 0, 0)
-
-			self.Experience.Text = self.Experience:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
-			self.Experience.Text:SetPoint('CENTER', self.Experience)
-
-			self.Experience.bg = self.Experience.Rested:CreateTexture(nil, 'BORDER')
-			self.Experience.bg:SetAllPoints(self.Experience)
-			self.Experience.bg:SetTexture(0.3, 0.3, 0.3)
-		end
-
-		local power = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallLeft')
-		power:SetPoint('LEFT', self.Health, 2, -1)
-		power.frequentUpdates = 0.1
-		self:Tag(power, '[ppower][druidpower]')
-	else
-		local info = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallLeft')
-		info:SetPoint('LEFT', self.Health, 2, -1)
-		info:SetPoint('RIGHT', health, 'LEFT')
-		self:Tag(info, '[pname]|cff0090ff[rare]|r')
-	end
-
-	if(unit == 'pet') then
-		self:SetAttribute('initial-height', petheight)
-		self:SetAttribute('initial-width', petwidth)
-
-		self.Auras = CreateFrame('Frame', nil, self)
-		self.Auras:SetPoint('TOPRIGHT', self, 'TOPLEFT', -4, 0)
-		self.Auras:SetHeight(4)
-		self.Auras:SetWidth(256)
-		self.Auras.size = 22
-		self.Auras.spacing = 4
-		self.Auras.initialAnchor = 'TOPRIGHT'
-		self.Auras['growth-x'] = 'LEFT'
-		self.PostCreateAuraIcon = createAura
-	end
-
-	if(unit == 'player' or unit == 'target') then
-		self:SetAttribute('initial-height', playertargetheight)
-		self:SetAttribute('initial-width', playertargetwidth)
-
-		--self.Buffs = CreateFrame('Frame', nil, self)
-		--self.Buffs:SetPoint('TOPLEFT', self, 'TOPRIGHT', 4, 0)
-		--self.Buffs:SetHeight(44)
-		--self.Buffs:SetWidth(236)
-		--self.Buffs.num = 20
-		--self.Buffs.size = debuffsize
-		--self.Buffs.spacing = 4
-		--self.Buffs.initialAnchor = 'TOPLEFT'
-		--self.Buffs['growth-y'] = 'DOWN'
-		--self.PostCreateAuraIcon = createAura
-
-		self.Castbar = CreateFrame('StatusBar', nil, self)
-		self.Castbar:SetWidth(playertargetwidth - 25)
-		self.Castbar:SetHeight(castbarheight)
-		self.Castbar:SetStatusBarTexture(minimalist)
-		self.Castbar:SetStatusBarColor(0.25, 0.25, 0.35)
-		self.Castbar:SetBackdrop(backdrop)
-		self.Castbar:SetBackdropColor(0, 0, 0)
-
-		self.Castbar.bg = self.Castbar:CreateTexture(nil, 'BORDER')
-		self.Castbar.bg:SetAllPoints(self.Castbar)
-		self.Castbar.bg:SetTexture(0.3, 0.3, 0.3)
-
-		self.Castbar.Text = self.Castbar:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallLeft')
-		self.Castbar.Text:SetPoint('LEFT', 2, 1)
-
-		self.Castbar.Time = self.Castbar:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmallRight')
-		self.Castbar.Time:SetPoint('RIGHT', -2, 1)
-		self.Castbar.CustomTimeText = castTime
-
-		self.Castbar.Button = CreateFrame('Frame', nil, self.Castbar)
-		self.Castbar.Button:SetHeight(castbarbuttonsize)
-		self.Castbar.Button:SetWidth(castbarbuttonsize)
-		self.Castbar.Button:SetBackdrop(backdrop)
-		self.Castbar.Button:SetBackdropColor(0, 0, 0)
-
-		self.Castbar.Icon = self.Castbar.Button:CreateTexture(nil, 'ARTWORK')
-		self.Castbar.Icon:SetAllPoints(self.Castbar.Button)
-		self.Castbar.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-		if(unit == 'target') then
-			self.PostCastStart = castIcon
-			self.PostChannelStart = castIcon
-			self.Castbar:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, castbaroffset)
-			self.Castbar.Button:SetPoint('BOTTOMLEFT', self.Castbar, 'BOTTOMRIGHT', 4, 0)
-		else
-			self.Castbar:SetPoint('TOPRIGHT', self, 'BOTTOMRIGHT', 0, castbaroffset)
-			self.Castbar.Button:SetPoint('BOTTOMRIGHT', self.Castbar, 'BOTTOMLEFT', -4, 0)
-		end
-
-		self.PostUpdatePower = updatePower
-	end
-
-	if(unit == 'target') then
-		--self.Debuffs = CreateFrame('Frame', nil, self)
-		--self.Debuffs:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -4)
-		--self.Debuffs:SetHeight(20 * 0.97)
-		--self.Debuffs:SetWidth(playertargetwidth)
-		--self.Debuffs.num = 20
-		--self.Debuffs.size = 20 * 0.97
-		--self.Debuffs.spacing = 4
-		--self.Debuffs.initialAnchor = 'TOPLEFT'
-		--self.Debuffs['growth-y'] = 'DOWN'
-		--self.PostCreateAuraIcon = createAura
-		--self.PostUpdateAuraIcon = updateDebuff
-
-		--self.CPoints = self:CreateFontString(nil, 'OVERLAY', 'SubZoneTextFont')
-		--self.CPoints:SetPoint('RIGHT', self, 'LEFT', -9, 0)
-		--self.CPoints:SetTextColor(1, 1, 1)
-		--self.CPoints:SetJustifyH('RIGHT')
-		--self.CPoints.unit = PlayerFrame.unit
-		--self:RegisterEvent('UNIT_COMBO_POINTS', updateCombo)
-	end
-
-	if(unit == 'player') then
-		if(select(2, UnitClass('player')) == 'DEATHKNIGHT') then
-            local runes  = CreateRuneFrame()
-            runes:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, -20)
-			runes:SetPoint('TOPRIGHT', self, 'BOTTOMRIGHT', 0, -20)
-
-            self.Runes = runes
-		end
-        if(unit=="player" and IsAddOnLoaded("oUF_BarFader")) then
-            self.BarFade = true
-            self.BarFaderMinAlpha = minalpha
-            self.BarFaderMaxAlpha = maxalpha
+    if cfg.allow_frame_movement then
+        self:SetMovable(true)
+        self:SetUserPlaced(true)
+        if not cfg.frames_locked then
+            self:EnableMouse(true)
+            self:RegisterForDrag("LeftButton","RightButton")
+            self:SetScript("OnDragStart", function(self) if IsAltKeyDown() and IsShiftKeyDown() then self:StartMoving() end end)
+            self:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
         end
-
-		self.Leader = self.Health:CreateTexture(nil, 'OVERLAY')
-		self.Leader:SetPoint('TOPLEFT', self, 0, 8)
-		self.Leader:SetHeight(16)
-		self.Leader:SetWidth(16)
-
-		self.Assistant = self.Health:CreateTexture(nil, 'OVERLAY')
-		self.Assistant:SetPoint('TOPLEFT', self, 0, 8)
-		self.Assistant:SetHeight(16)
-		self.Assistant:SetWidth(16)
-
-		local info = self.Health:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
-		info:SetPoint('CENTER', 0, -1)
-		info.frequentUpdates = 0.25
-		self:Tag(info, '[pthreat]|cffff0000[pvptime]|r')
-
-		--self.PostUpdateAuraIcon = updateBuff
-		--self.CustomAuraFilter = customFilter
-	end
-
-	self.DebuffHighlightBackdrop = true
-	self.DebuffHighlightFilter = true
-    self.MoveableFrames = true
-end
-
-local function hideBlizPartyFrames(self)
-    local blizUI = PartyMemberBackground
-    for i=1,4 do _G["PartyMemberFrame"..i]:SetParent( blizUI )
-        _G["PartyMemberFrame"..i.."PetFrame"]:SetParent( blizUI )
+    else
+        self:IsUserPlaced(false)
     end
-    blizUI:Hide(); 
+
+	self:SetScript("OnEnter", UnitFrame_OnEnter)
+	self:SetScript("OnLeave", UnitFrame_OnLeave)
+
+	self:RegisterForClicks"anyup"
+	self:SetAttribute("*type2", "menu")
+    
+    --create the healthbar
+	local Health = CreateFrame("StatusBar", nil, self)
+    --this needs to be a % of total height, so that it is easy to scale up and down.
+    --leaving it as is for now. I'll need to update its height in player( DK() )
+	Health:SetHeight(cfg.height-2)
+	Health:SetStatusBarTexture(cfg.texture)
+	Health:GetStatusBarTexture():SetHorizTile(false)
+
+	Health.frequentUpdates = true
+
+	Health:SetPoint"TOP"
+	Health:SetPoint"LEFT"
+	Health:SetPoint"RIGHT"
+
+	self.Health = Health
+
+	local HealthBackground = Health:CreateTexture(nil, "BORDER")
+    --make the background match self.Health
+	HealthBackground:SetAllPoints(self)
+	HealthBackground:SetTexture(0, 0, 0, .5)
+
+	Health.bg = HealthBackground
+
+	local HealthPoints = Health:CreateFontString(nil, "OVERLAY")
+	HealthPoints:SetPoint("RIGHT", -2, -1)
+	HealthPoints:SetFontObject(GameFontNormalSmall)
+	HealthPoints:SetTextColor(1, 1, 1)
+    --Guessing that this sets the health points string to
+    --dead, offline, or health, whichever matches first.
+	self:Tag(HealthPoints, '[dead][offline][lily:health]')
+
+	Health.value = HealthPoints
+
+    --power frame time.
+	local Power = CreateFrame("StatusBar", nil, self)
+    --again should be a % based height, Leaving alone for now.
+	Power:SetHeight(2)
+	Power:SetStatusBarTexture(cfg.texture)
+	Power:GetStatusBarTexture():SetHorizTile(false)
+
+	Power.frequentUpdates = true
+	Power.colorTaPowering = true
+	Power.colorHaPoweriness = true
+	Power.colorClass = true
+	Power.colorReaction = true
+
+	Power:SetParent(self)
+	Power:SetPoint"LEFT"
+	Power:SetPoint"RIGHT"
+	Power:SetPoint("TOP", Health, "BOTTOM")
+
+	self.Power = Power
+
+    --Power points text
+	local PowerPoints = Power:CreateFontString(nil, "OVERLAY")
+	PowerPoints:SetPoint("RIGHT", HealthPoints, "LEFT", 0, 0)
+	PowerPoints:SetFontObject(GameFontNormalSmall)
+	PowerPoints:SetTextColor(1, 1, 1)
+	self:Tag(PowerPoints, '[lily:power< | ]')
+
+	Power.value = PowerPoints
+
+    --castbar time.
+	local Castbar = CreateFrame("StatusBar", nil, self)
+	Castbar:SetStatusBarTexture(cfg.texture)
+	Castbar:SetStatusBarColor(1, .25, .35, .5)
+	--Make it the same size as the HP bar.
+    Castbar:SetAllPoints(Health)
+    --Make it overlay health. This could be an issue 
+    --if something chaincasts
+	Castbar:SetToplevel(true)
+	Castbar:GetStatusBarTexture():SetHorizTile(false)
+
+	self.Castbar = Castbar
+    
+    --Icon time
+    --Leader icon
+	local Leader = self:CreateTexture(nil, "OVERLAY")
+	Leader:SetHeight(16)
+	Leader:SetWidth(16)
+    --set it above the Health bar, but lowered 5 px.
+	Leader:SetPoint("BOTTOM", Health, "TOP", 0, -5)
+
+	self.Leader = Leader
+
+    --master looter icon
+	local MasterLooter = self:CreateTexture(nil, 'OVERLAY')
+	MasterLooter:SetHeight(16)
+	MasterLooter:SetWidth(16)
+    --set it to the right of Leader icon.
+	MasterLooter:SetPoint('LEFT', Leader, 'RIGHT')
+
+	self.MasterLooter = MasterLooter
+
+    --Raid icon(the circle, square, etc)
+	local RaidIcon = Health:CreateFontString(nil, "OVERLAY")
+	RaidIcon:SetPoint("LEFT", 2, 4)
+	RaidIcon:SetJustifyH"LEFT"
+	RaidIcon:SetFontObject(GameFontNormalSmall)
+	RaidIcon:SetTextColor(1, 1, 1)
+
+	self.RIcon = RaidIcon
+    --handle target switches.
+	self:RegisterEvent("RAID_TARGET_UPDATE", RAID_TARGET_UPDATE)
+	table.insert(self.__elements, RAID_TARGET_UPDATE)
+
+    --Show the name on the frame.
+	local name = Health:CreateFontString(nil, "OVERLAY")
+	name:SetPoint("LEFT", RaidIcon, "RIGHT", 0, -5)
+	name:SetPoint("RIGHT", PowerPoints, "LEFT")
+	name:SetJustifyH"LEFT"
+	name:SetFontObject(GameFontNormalSmall)
+	name:SetTextColor(1, 1, 1)
+
+	self.Name = name
+    
+    --Set frame size. 
+	self:SetAttribute('initial-height', cfg.height)
+	self:SetAttribute('initial-width', cfg.width)
+    
+    --make sure the cast bar keeps up with target switchs.
+	self:RegisterEvent('UNIT_NAME_UPDATE', PostCastStopUpdate)
+	table.insert(self.__elements, PostCastStopUpdate)
+
+    
+	Castbar.PostChannelStart = PostCastStart
+	Castbar.PostCastStart = PostCastStart
+
+	Castbar.PostCastStop = PostCastStop
+	Castbar.PostChannelStop = PostCastStop
+
+	Health.PostUpdate = PostUpdateHealth
+	Power.PostUpdate = PostUpdatePower
 end
 
-oUF:RegisterStyle('Cynyr', style)
-oUF:SetActiveStyle('Cynyr')
+--Unit specfic layout stuff.
+local UnitSpecific = {
+	pet = function(self)
+        --Run the shared layout, and then the custom layout code.
+		Shared(self)
+		self:RegisterEvent("UNIT_HAPPINESS", updateName)
+	end,
 
-oUF:Spawn('player', "oUF_Cynyr_player"):SetPoint('CENTER', UIParent, -220, -250)
-oUF:Spawn('target', "oUF_Cynyr_target"):SetPoint('CENTER', UIParent, 220, -250)
-oUF:Spawn('targettarget', "oUF_Cynyr_targettarget"):SetPoint('BOTTOMRIGHT', oUF.units.target, 'TOPRIGHT', 0, 5)
-oUF:Spawn('focus', "oUF_Cynyr_focus"):SetPoint('BOTTOMLEFT', oUF.units.player, 'TOPLEFT', 0, 5)
-oUF:Spawn('pet', "oUF_Cynyr_pet"):SetPoint('RIGHT', oUF.units.player, 'LEFT', -25, 0)
-if (hideparty) then
-    hideBlizPartyFrames()
+	target = function(self)
+        --Run Shared layout then add custom stuff.
+		Shared(self)
+        
+        --[[
+        --Uncomment to show buffs/debuffs
+		local Buffs = CreateFrame("Frame", nil, self)
+		Buffs.initialAnchor = "BOTTOMRIGHT"
+		Buffs["growth-x"] = "LEFT"
+		Buffs:SetPoint("RIGHT", self, "LEFT")
+
+		Buffs:SetHeight(22)
+		Buffs:SetWidth(8 * 22)
+		Buffs.num = 8
+		Buffs.size = 22
+
+		self.Buffs = Buffs
+
+		local Debuffs = CreateFrame("Frame", nil, self)
+		Debuffs:SetPoint("LEFT", self, "RIGHT")
+		Debuffs.showDebuffType = true
+		Debuffs.initialAnchor = "BOTTOMLEFT"
+
+		Debuffs:SetHeight(22)
+		Debuffs:SetWidth(8 * 22)
+		Debuffs.num = 8
+		Debuffs.size = 22
+
+		self.Debuffs = Debuffs
+
+		Debuffs.PostCreateIcon = PostCreateIcon
+		Debuffs.PostUpdateIcon = PostUpdateIcon
+
+		Buffs.PostCreateIcon = PostCreateIcon
+		Buffs.PostUpdateIcon = PostUpdateIcon
+        --]]
+	end,
+    
+    player = function(self)
+        Shared(self)
+        if (select(2, UnitClass('player')) == 'DEATHKNIGHT') then
+            self.Health:SetHeight(self.Health:GetHeight()-5)
+            
+            --[[ Creates a RuneFrame
+                FRAME CreateRuneFrame(FRAME self)
+            ]]
+            local i
+            local runes = CreateFrame('Frame', nil, self)
+            
+            for i = 1, 6 do
+                runes[i] = CreateFrame('StatusBar', nil, runes)
+                --runes[i]:SetParent(runes)
+                runes[i]:SetHeight(5)
+                runes[i]:SetWidth((cfg.width-5)/6)
+                --runes[i]:SetWidth(36)
+                runes[i]:SetStatusBarTexture(cfg.texture, 'BORDER')
+                runes[i]:SetBackdrop(cfg.backdrop)
+                runes[i]:SetBackdropColor(0, 0, 0, 1)
+                runes[i]:SetBackdropBorderColor(0, 0, 0, 0)
+                runes[i].bg = runes[i]:CreateTexture(nil, 'BACKGROUND')
+                runes[i].bg:SetAllPoints(runes[i])
+                runes[i].bg:SetTexture(cfg.texture)
+                runes[i].bg:SetVertexColor(0.3, 0.3, 0.3, 0.5)
+                if (i == 1) then
+                    runes[i]:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, 5)
+                    --runes[i]:SetPoint('BOTTOMLEFT', runes, 'BOTTOMLEFT', 0,0)
+                else
+                    runes[i]:SetPoint('LEFT', runes[i-1], 'RIGHT', 1, 0)
+                end
+                --runes[i]:Show()
+            end
+            self.Runes = runes
+        end
+    end,
+
+    targettarget = function(self)
+        Shared(self)
+        --Make target and focus smaller.
+        self:SetAttribute('initial-width', cfg.width * 0.85)
+    end,
+
+}
+UnitSpecific.focus = UnitSpecific.targettarget
+
+do
+	local range = {
+		insideAlpha = 1,
+		outsideAlpha = .5,
+	}
+
+	UnitSpecific.party = function(self)
+		Shared(self)
+
+		local Health, Power = self.Health, self.Power
+		local Auras = CreateFrame("Frame", nil, self)
+		Auras:SetHeight(Health:GetHeight() + Power:GetHeight())
+		Auras:SetPoint("LEFT", self, "RIGHT")
+
+		Auras.showDebuffType = true
+
+		Auras:SetWidth(9 * 22)
+		Auras.size = 22
+		Auras.gap = true
+		Auras.numBuffs = 4
+		Auras.numDebuffs = 4
+
+		Auras.PostCreateIcon = PostCreateIcon
+
+		self.Auras = Auras
+
+		self.Range = range
+	end
 end
 
+oUF:RegisterStyle("Cynyr", Shared)
+for unit,layout in next, UnitSpecific do
+	-- Capitalize the unit name, so it looks better.
+	oUF:RegisterStyle('Cynyr - ' .. unit:gsub("^%l", string.upper), layout)
+end
+
+-- A small helper to change the style into a unit specific, if it exists.
+local spawnHelper = function(self, unit, ...)
+	if(UnitSpecific[unit]) then
+		self:SetActiveStyle('Cynyr - ' .. unit:gsub("^%l", string.upper))
+		local object = self:Spawn(unit)
+		object:SetPoint(...)
+		return object
+	else
+		self:SetActiveStyle'Cynyr'
+		local object = self:Spawn(unit)
+		object:SetPoint(...)
+		return object
+	end
+end
+
+oUF:Factory(function(self)
+	local base = 100
+	spawnHelper(self, 'focus', "BOTTOM", 0, base + (40 * 1))
+	spawnHelper(self, 'pet', 'BOTTOM', 0, base + (40 * 2))
+	spawnHelper(self, 'player', 'BOTTOM', 0, base + (40 * 3))
+	spawnHelper(self, 'target', 'BOTTOM', 0, base + (40 * 4))
+	spawnHelper(self, 'targettarget', 'BOTTOM', 0, base + (40 * 5))
+
+	self:SetActiveStyle'Cynyr - Party'
+	local party = self:SpawnHeader(nil, nil, 'raid,party,solo', 'showParty', cfg.showparty, 'showPlayer', cfg.showplayer, 'yOffset', -20)
+	party:SetPoint("TOPLEFT", 30, -30)
+end)
