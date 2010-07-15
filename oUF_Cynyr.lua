@@ -5,22 +5,6 @@
 
 --]]
 
---some settings have been moved to here, for easier changing
---These need to be moved to config.lua later if i still use them.
-local minalpha = 0
-local maxalpha = 1
-local castbaroffset = 80
-local castbarheight = 16
-local castbarbuttonsize = 21
-local playertargetheight = 27
-local playertargetwidth = 180
-local petheight = 27
-local petwidth = 130
-local focustargettargetheight = 20
-local focustargettargetwidth = playertargetwidth * .80
-local debuffsize = 10
-local hideparty=true
-
 --get the addon namespace
 local addon, ns = ...
 
@@ -154,14 +138,20 @@ end
 
 local PostUpdatePower = function(Power, unit, min, max)
 	local Health = Power:GetParent().Health
+    if (select(2, UnitClass('player')) == 'DEATHKNIGHT' and unit == "player") then
+        height = cfg.height - 5
+    else
+        height = cfg.height
+    end
+    print("The height of health for unit:" .. unit .. " is: " .. height)
 	if(min == 0 or max == 0 or not UnitIsConnected(unit)) then
 		Power:SetValue(0)
-		Health:SetHeight(22)
+		Health:SetHeight(height)
 	elseif(UnitIsDead(unit) or UnitIsGhost(unit)) then
 		Power:SetValue(0)
-		Health:SetHeight(22)
+		Health:SetHeight(height)
 	else
-		Health:SetHeight(20)
+		Health:SetHeight(height-2)
 	end
 end
 
@@ -201,7 +191,8 @@ local Shared = function(self, unit)
 	local Health = CreateFrame("StatusBar", nil, self)
     --this needs to be a % of total height, so that it is easy to scale up and down.
     --leaving it as is for now. I'll need to update its height in player( DK() )
-	Health:SetHeight(cfg.height-2)
+	--Health:SetHeight((cfg.height-2))
+	Health:SetHeight(cfg.height)
 	Health:SetStatusBarTexture(cfg.texture)
 	Health:GetStatusBarTexture():SetHorizTile(false)
 
@@ -214,7 +205,7 @@ local Shared = function(self, unit)
 	self.Health = Health
 
 	local HealthBackground = Health:CreateTexture(nil, "BORDER")
-    --make the background match self.Health
+    --make the background match self
 	HealthBackground:SetAllPoints(self)
 	HealthBackground:SetTexture(0, 0, 0, .5)
 
@@ -381,14 +372,19 @@ local UnitSpecific = {
     player = function(self)
         Shared(self)
         if (select(2, UnitClass('player')) == 'DEATHKNIGHT') then
-            self.Health:SetHeight(self.Health:GetHeight()-5)
+            local Health = self.Health
             
             --[[ Creates a RuneFrame
                 FRAME CreateRuneFrame(FRAME self)
             ]]
             local i
             local runes = CreateFrame('Frame', nil, self)
-            
+            --Needs to be positioned to anchor runes to it.
+            runes:SetHeight(5)
+            runes:SetPoint"LEFT"
+            runes:SetPoint"RIGHT"
+            runes:SetPoint"BOTTOM"
+
             for i = 1, 6 do
                 runes[i] = CreateFrame('StatusBar', nil, runes)
                 --runes[i]:SetParent(runes)
@@ -404,14 +400,12 @@ local UnitSpecific = {
                 runes[i].bg:SetTexture(cfg.texture)
                 runes[i].bg:SetVertexColor(0.3, 0.3, 0.3, 0.5)
                 if (i == 1) then
-                    runes[i]:SetPoint('TOPLEFT', self, 'BOTTOMLEFT', 0, 5)
-                    --runes[i]:SetPoint('BOTTOMLEFT', runes, 'BOTTOMLEFT', 0,0)
+                    runes[i]:SetPoint('TOPLEFT', runes, 'TOPLEFT', 0, 0)
                 else
                     runes[i]:SetPoint('LEFT', runes[i-1], 'RIGHT', 1, 0)
                 end
-                --runes[i]:Show()
             end
-            self.Runes = runes
+            self.Runes = runes                                                     
         end
     end,
 
