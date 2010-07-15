@@ -1,0 +1,12 @@
+Cynyr's unitframes, previously based on p3lim, now based on lily. 
+
+ToDo:
+- Add threat %
+- Add mana percent (maybe just show it when target.name = Lady Deathwhisper)
+- Add druid mana bar
+- Fix height issues(2 px) when player.class == DK
+- ???
+
+Done:
+- Add runeframes
+- Change sizes to fit my resoultion, and to make player/target bars bigger
