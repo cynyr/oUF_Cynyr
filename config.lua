@@ -18,8 +18,8 @@ cfg.showtarget = true
 cfg.showtot = true
 cfg.showpet = true
 cfg.showfocus = true
-cfg.showparty = true
-cfg.showraid = true
+cfg.showparty = false
+cfg.showraid = false
 cfg.allow_frame_movement = true
 cfg.frames_locked = false 
 
@@ -32,7 +32,7 @@ cfg.backdrop = {
 cfg.font = "FONTS\\FRIZQT__.ttf"   
 
 cfg.height = 27
-cfg.width = 155
+cfg.width = 185
 
 -----------------------------
 -- HANDOVER

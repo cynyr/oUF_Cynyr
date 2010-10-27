@@ -143,7 +143,7 @@ local PostUpdatePower = function(Power, unit, min, max)
     else
         height = cfg.height
     end
-    print("The height of health for unit:" .. unit .. " is: " .. height)
+    --print("The height of health for unit:" .. unit .. " is: " .. height)
 	if(min == 0 or max == 0 or not UnitIsConnected(unit)) then
 		Power:SetValue(0)
 		Health:SetHeight(height)
@@ -164,7 +164,7 @@ local RAID_TARGET_UPDATE = function(self, event)
 	end
 end
 
-local Shared = function(self, unit)
+local Shared = function(self, unit, isSingle)
     --Set up the menu type and placement.
 	self.menu = menu
 
@@ -229,8 +229,8 @@ local Shared = function(self, unit)
 	Power:GetStatusBarTexture():SetHorizTile(false)
 
 	Power.frequentUpdates = true
-	Power.colorTaPowering = true
-	Power.colorHaPoweriness = true
+	Power.colorTapping = true
+	Power.colorHappiness = true
 	Power.colorClass = true
 	Power.colorReaction = true
 
@@ -307,6 +307,9 @@ local Shared = function(self, unit)
     --Set frame size. 
 	self:SetAttribute('initial-height', cfg.height)
 	self:SetAttribute('initial-width', cfg.width)
+    if(isSingle) then
+        self:SetSize(cfg.width, cfg.height)
+    end
     
     --make sure the cast bar keeps up with target switchs.
 	self:RegisterEvent('UNIT_NAME_UPDATE', PostCastStopUpdate)
@@ -325,15 +328,23 @@ end
 
 --Unit specfic layout stuff.
 local UnitSpecific = {
-	pet = function(self)
+	pet = function(self, ...)
         --Run the shared layout, and then the custom layout code.
-		Shared(self)
+		Shared(self, ...)
 		self:RegisterEvent("UNIT_HAPPINESS", updateName)
 	end,
 
-	target = function(self)
+	target = function(self, ...)
         --Run Shared layout then add custom stuff.
-		Shared(self)
+		Shared(self, ...)
+
+        --Both HP% and PP% need custon functions to only display 
+        --something if more than 0%, or less than 100%
+        local HealthPoints = self.Health.value
+        --self:Tag(HealthPoints, '[dead][offline][lily:health] ([perhp]%)')
+        local PowerPoints = self.Power.value
+	    --self:Tag(PowerPoints, '[lily:power< | ]([perpp< | ]%)')
+
         
         --[[
         --Uncomment to show buffs/debuffs
@@ -424,8 +435,8 @@ do
 		outsideAlpha = .5,
 	}
 
-	UnitSpecific.party = function(self)
-		Shared(self)
+	UnitSpecific.party = function(self, ...)
+		Shared(self, ...)
 
 		local Health, Power = self.Health, self.Power
 		local Auras = CreateFrame("Frame", nil, self)
@@ -478,6 +489,13 @@ oUF:Factory(function(self)
 	spawnHelper(self, 'targettarget', 'BOTTOM', 0, base + (40 * 5))
 
 	self:SetActiveStyle'Cynyr - Party'
-	local party = self:SpawnHeader(nil, nil, 'raid,party,solo', 'showParty', cfg.showparty, 'showPlayer', cfg.showplayer, 'yOffset', -20)
+	local party = self:SpawnHeader(
+        nil, nil, 'raid,party,solo',
+        'showParty', cfg.showparty, 'showPlayer', cfg.showplayer, 'yOffset', -20,
+        'oUF-initialConfigFunction', [[
+			self:SetHeight(22)
+			self:SetWidth(220)
+		]]
+    )
 	party:SetPoint("TOPLEFT", 30, -30)
 end)
