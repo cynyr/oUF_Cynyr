@@ -380,8 +380,8 @@ local UnitSpecific = {
         --]]
 	end,
     
-    player = function(self)
-        Shared(self)
+    player = function(self, ...)
+        Shared(self, ...)
         if (select(2, UnitClass('player')) == 'DEATHKNIGHT') then
             local Health = self.Health
             
@@ -420,8 +420,8 @@ local UnitSpecific = {
         end
     end,
 
-    targettarget = function(self)
-        Shared(self)
+    targettarget = function(self, ...)
+        Shared(self, ...)
         --Make target and focus smaller.
         self:SetAttribute('initial-width', cfg.width * 0.85)
     end,

@@ -31,7 +31,7 @@ cfg.backdrop = {
 --cfg.backdrop_edge_texture = "Interface\\AddOns\\oUF_Simple\\media\\backdrop_edge"
 cfg.font = "FONTS\\FRIZQT__.ttf"   
 
-cfg.height = 27
+cfg.height = 20
 cfg.width = 185
 
 -----------------------------
